@@ -47,13 +47,12 @@ class Game(object):
     def run(self: Self) -> None:
         self._running = 1
         start_time = time.time()
-        accumulator = 0
 
         while self._running:
             delta_time = time.time() - start_time
             start_time = time.time()
             
-            accumulator += delta_time * self._GAME_SPEED
+            rel_game_speed = delta_time * self._GAME_SPEED
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -64,19 +63,18 @@ class Game(object):
                     self._obstacles.append(rect)
 
             # Update
-            while accumulator >= self._TIMESTEP:
-                self._boids.update(self._TIMESTEP)
-                accumulator -= self._TIMESTEP
+            self._boids.update(rel_game_speed)
 
             # Render
             self._surface.fill((0, 0, 0))
-            for y in range(self._SURF_SIZE[1] // 16):
-                for x in range(self._SURF_SIZE[0] // 16):
-                    pos = pg.Vector2(x, y) * 16
+            tilesize = 32
+            for y in range(self._SURF_SIZE[1] // tilesize + 1):
+                for x in range(self._SURF_SIZE[0] // tilesize + 1):
+                    pos = pg.Vector2(x, y) * tilesize
                     self._surface.set_at(pos, (255, 255, 255))
             for obstacle in self._obstacles:
                 pg.draw.rect(self._surface, (0, 255, 0), obstacle)
-            self._boids.render(self._surface, accumulator / self._TIMESTEP * 0)
+            self._boids.render(self._surface)
             resized_surf = pg.transform.scale(self._surface, self._SCREEN_SIZE)
             self._screen.blit(resized_surf, (0, 0))
 

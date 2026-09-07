@@ -10,16 +10,11 @@ import pygame as pg
 
 # https://vanhunteradams.com/Pico/Animal_Movement/Boids-algorithm.html
 class Boid(object):
-    _OFFSETS = (
-        (-1, -1), (0, -1), (1, -1),
-        (-1,  0), (0,  0), (1,  0),
-        (-1,  1), (0,  1), (1,  1),
-    )
     def __init__(self: Self,
                  pos: pg.Vector2,
                  velocity: pg.Vector2,
                  phys_radius: Real=8,
-                 vis_radius: Real=64,
+                 vis_radius: Real=32,
                  fov: Real=270,
                  separation: Real=0.05,
                  alignment: Real=0.05,
@@ -81,19 +76,29 @@ class Boid(object):
     def fov(self: Self, value: Real) -> None:
         self._fov = value
 
+    def _offsets(self: Self) -> None:
+        if self._pos[0] > self._rollover.centerx:
+            if self._pos[1] > self._rollover.centery:
+                return ((0, 0), (1, 0), (0, 1), (1, 1))
+            return ((0, 0), (1, 0), (1, -1), (0, -1))
+        elif self._pos[1] > self._rollover.centery:
+            return ((0, 0), (-1, 0), (-1, 1), (0, 1))
+        return ((0, 0), (-1, 0), (-1, -1), (0, -1))
+
     def _basic_update(self: Self, boids: list[Boid]) -> None:
         # Boids algorithm
         self._accel = pg.Vector2(0, 0)
         vel_avg = pg.Vector2(0, 0)
         pos_avg = pg.Vector2(0, 0)
         count = 0
+        offsets = self._offsets()
         for boid in boids:
             if boid is self:
                 continue
             boid_pos = boid._pos
             if self._rollover[2] and self._rollover[3]:
                 lowest = math.inf
-                for offset in self._OFFSETS:
+                for offset in offsets:
                     tentative = (
                         boid._pos
                         + (offset[0] * self._rollover[2],
@@ -158,12 +163,13 @@ class Boid(object):
 
 class Level(object):
     def __init__(self: Self,
-                 boids: list[Boid]=set(),
-                 obstacles: list[pg.Rect]=[]) -> None:
+                 boids: list[Boid]=[],
+                 obstacles: list[pg.Rect]=[],
+                 timestep: Real=0.02) -> None:
         self._boids = boids
         self._obstacles = obstacles
-        self._sets = {}
-        self._tilesize = 64
+        self._timestep = timestep
+        self._accumulator = 0
 
     @staticmethod
     def random_boids(count: int,
@@ -197,28 +203,45 @@ class Level(object):
             ))
         return boids
 
-    def _gen_key(self: Self, boid: Boid) -> None:
-        return (
-            boid._pos[0] // self._tilesize,
-            boid._pos[1] // self._tilesize,
-        )
+    @property
+    def boids(self: Self) -> list[Boid]:
+        return self._boids
 
-    def _update_sets(self: Self) -> None:
-        self._sets = {}
-        for boid in self._boids:
-            key = self._gen_key(boid)
-            boids = self._sets.get(key)
-            if boids is None:
-                self._sets[key] = {boid}
-            else:
-                boids.add(boid)
+    @boids.setter
+    def boids(self: Self, value: list[Boid]) -> None:
+        self._boids = value
+
+    @property
+    def obstacles(self: Self) -> list[pg.Rect]:
+        return self._obstacles
+
+    @obstacles.setter
+    def obstacles(self: Self, value: list[pg.Rect]) -> None:
+        self._obstacles = value
+
+    @property
+    def timestep(self: Self) -> Real:
+        return self._timestep
+
+    @timestep.setter
+    def timestep(self: Self, value: Real) -> None:
+        self._timestep = value
 
     def update(self: Self, rel_game_speed: Real) -> None:
-        # self._update_sets()
-        for boid in self._boids:
-            boid.update(rel_game_speed, self._boids, self._obstacles)
+        if self._timestep:
+            self._accumulator += rel_game_speed
+            while self._accumulator >= self._timestep:
+                for boid in self._boids:
+                    boid.update(self._timestep, self._boids, self._obstacles)
+                self._accumulator -= self._timestep
+        else:
+            for boid in self._boids:
+                boid.update(rel_game_speed, self._boids, self._obstacles)
 
-    def render(self: Self, surf: pg.Surface, t: Real=1) -> None:
+    def render(self: Self, surf: pg.Surface) -> None:
         for boid in self._boids:
-            boid.render(surf, t)
+            boid.render(
+                surf,
+                self._accumulator / self._timestep if self._timestep else 1,
+            )
 
