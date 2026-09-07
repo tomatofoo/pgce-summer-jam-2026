@@ -14,8 +14,8 @@ class Game(object):
     _SURF_SIZE = (int(_SCREEN_SIZE[0] / _SURF_RATIO[0]),
                   int(_SCREEN_SIZE[1] / _SURF_RATIO[1]))
     _SCREEN_FLAGS = pg.RESIZABLE | pg.SCALED
-    _GAME_SPEED = 5
-    _TIMESTEP = 1 / 30
+    _GAME_SPEED = 1
+    _TIMESTEP = 0.02
 
     def __init__(self: Self) -> None:
         pg.init()
@@ -35,7 +35,12 @@ class Game(object):
         rect = self._surface.get_rect()
         self._obstacles = []
         self._boids = Level(
-            Level.random_boids(100, pos_range=rect, bound=rect),
+            Level.random_boids(
+                count=50,
+                pos_range=rect,
+                bound=rect.inflate(-50, -50),
+                rollover=rect.inflate(10, 10),
+            ),
             self._obstacles,
         )
 
@@ -48,7 +53,7 @@ class Game(object):
             delta_time = time.time() - start_time
             start_time = time.time()
             
-            rel_game_speed = delta_time * self._GAME_SPEED
+            accumulator += delta_time * self._GAME_SPEED
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -59,7 +64,9 @@ class Game(object):
                     self._obstacles.append(rect)
 
             # Update
-            self._boids.update(rel_game_speed)
+            while accumulator >= self._TIMESTEP:
+                self._boids.update(self._TIMESTEP)
+                accumulator -= self._TIMESTEP
 
             # Render
             self._surface.fill((0, 0, 0))
@@ -69,7 +76,7 @@ class Game(object):
                     self._surface.set_at(pos, (255, 255, 255))
             for obstacle in self._obstacles:
                 pg.draw.rect(self._surface, (0, 255, 0), obstacle)
-            self._boids.render(self._surface, accumulator / self._TIMESTEP)
+            self._boids.render(self._surface, accumulator / self._TIMESTEP * 0)
             resized_surf = pg.transform.scale(self._surface, self._SCREEN_SIZE)
             self._screen.blit(resized_surf, (0, 0))
 
